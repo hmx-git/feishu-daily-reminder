@@ -1,0 +1,11 @@
+﻿{
+  "id": "daily-feishu-meeting-reminder",
+  "type": "daily",
+  "time": "10:15",
+  "timezone": "Asia/Shanghai",
+  "chat_id": "oc_36e99ff82ec6bc822f7320b645bf556d",
+  "chat_name": "破茧",
+  "message": "1. 提醒大家填写例会表，链接如下：\nhttps://qdreaming.feishu.cn/sheets/C7jXszp7OhnbgNt2xTucg4FMnyf\n2. 有事不能参加联系PM~",
+  "created_at": "2026-08-12T03:40:00.000Z",
+  "last_sent_at": null
+}

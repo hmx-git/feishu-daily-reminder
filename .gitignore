@@ -1,0 +1,8 @@
+﻿.env
+.env.*
+!.env.example
+node_modules/
+data/schedules.json
+codex-config-snippet.toml
+browser-skill.txt
+*.log

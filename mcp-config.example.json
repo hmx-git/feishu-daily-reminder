@@ -1,0 +1,9 @@
+﻿{
+  "mcpServers": {
+    "feishu-reminder": {
+      "command": "node",
+      "args": ["D:/work/work_feishu/src/server.js"],
+      "envFile": "D:/work/work_feishu/.env"
+    }
+  }
+}

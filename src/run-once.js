@@ -1,0 +1,12 @@
+﻿import 'dotenv/config';
+import { readFile } from 'node:fs/promises';
+const file = process.env.FEISHU_SCHEDULE_FILE || './data/schedules.json';
+const schedules = JSON.parse(await readFile(file, 'utf8'));
+if (!Array.isArray(schedules) || schedules.length === 0) throw new Error('没有已保存的提醒计划。');
+const target = schedules[0];
+const url = 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal';
+const tokenResp = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ app_id: process.env.FEISHU_APP_ID, app_secret: process.env.FEISHU_APP_SECRET }) });
+const token = await tokenResp.json();
+if (token.code) throw new Error(`${token.code}: ${token.msg}`);
+const resp = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id`, { method: 'POST', headers: {Authorization: `Bearer ${token.tenant_access_token}`, 'Content-Type':'application/json'}, body: JSON.stringify({ receive_id: target.chat_id, msg_type:'text', content: JSON.stringify({text: target.message}) }) });
+console.log(await resp.text());

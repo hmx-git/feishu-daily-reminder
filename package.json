@@ -1,0 +1,16 @@
+﻿{
+  "name": "feishu-reminder-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server for sending and scheduling Feishu group reminders",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js",
+    "run-once": "node src/run-once.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "dotenv": "^17.2.1"
+  }
+}

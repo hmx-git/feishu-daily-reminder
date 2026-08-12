@@ -1,0 +1,25 @@
+﻿name: Feishu daily meeting reminder
+
+on:
+  schedule:
+    # 10:15 Asia/Shanghai = 02:15 UTC. GitHub may start scheduled jobs a few minutes late.
+    - cron: '15 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Send image and reminder
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+        run: node src/send-reminder.js
