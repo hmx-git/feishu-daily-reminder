@@ -17,9 +17,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Send image and reminder
+      - name: Send reminder card
         env:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
         run: node src/send-reminder.js
+
