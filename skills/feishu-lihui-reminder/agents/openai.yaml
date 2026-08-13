@@ -1,0 +1,6 @@
+﻿interface:
+  display_name: "feishu_lihui_reminder"
+  short_description: "配置飞书例会图片卡片提醒与云端定时发送"
+  default_prompt: "使用 $feishu-lihui-reminder 配置或排查每天 10:15 的飞书例会提醒。"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+﻿interface:
+  display_name: "feishu_lihui_skill"
+  short_description: "创建并部署可复用的飞书例会图片卡片定时提醒工作流方案"
+  default_prompt: "使用 $feishu-lihui-skill 为指定飞书群配置可复用的例会定时提醒。"
+policy:
+  allow_implicit_invocation: true

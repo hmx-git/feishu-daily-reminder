@@ -1,0 +1,34 @@
+﻿name: Feishu OKR reminder
+
+on:
+  schedule:
+    # Every Friday 17:00 Asia/Shanghai = 09:00 UTC. GitHub may start scheduled jobs a few minutes late.
+    - cron: '0 9 * * 5'
+  workflow_dispatch:
+
+jobs:
+  send-okr-reminder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Send OKR reminder card
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_OKR_CHAT_ID }}
+          FEISHU_IMAGE_URL: https://qdreaming.feishu.cn/file/Sjbvbob6tomLBBx64n7crXeOnwh
+          FEISHU_IMAGE_FILENAME: okr-reminder-image
+          FEISHU_SHEET_URL: https://qdreaming.feishu.cn/okr
+          FEISHU_MESSAGE: |
+            ⏰ 嘀嘀嘀，更新 OKR 啦～
+            不更新 OKR，请奶茶啦
+          FEISHU_CARD_TITLE: 📊 OKR 提醒
+          FEISHU_BUTTON_TEXT: 更新 OKR
+        run: node src/send-reminder.js
+
