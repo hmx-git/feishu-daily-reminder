@@ -1,4 +1,4 @@
-﻿# 飞书例会提醒 MCP
+# 飞书例会提醒 MCP
 
 这个项目提供一个可被 Codex/Claude Desktop 等 MCP 客户端调用的本地 MCP 服务，也包含一个无需电脑开机的 GitHub Actions 云端提醒。
 
@@ -63,3 +63,9 @@ MCP 使用 stdio 传输。服务进程必须持续运行，定时器才能按时
 - `list_scheduled_reminders`: 查看已保存计划
 - `cancel_scheduled_reminder`: 按 ID 取消计划
 - `find_feishu_group`: 按名称查找群
+
+## 本地优先、云端兜底
+
+启用提醒时将 cloud_fallback 设为 	rue。本地发送成功后会把当天状态写入 GitHub 的 data/local-delivery.json；云端工作流等待 5 分钟后读取状态，已发送则跳过；本地未发送则在北京时间 10:15–10:28 内兜底。
+
+本机 .env 需要配置 GitHub Fine-grained Token，仅授权本仓库的 Contents: Read and write。

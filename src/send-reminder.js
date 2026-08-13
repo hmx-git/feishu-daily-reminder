@@ -36,6 +36,29 @@ function parseClock(value, fallback) {
   return hour * 60 + minute;
 }
 
+function localDateString(timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((result, part) => { result[part.type] = part.value; return result; }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+async function skipIfLocalAlreadySent() {
+  if (process.env.FEISHU_SKIP_IF_LOCAL_SENT !== 'true') return false;
+  const stateUrl = process.env.FEISHU_LOCAL_STATE_URL;
+  if (!stateUrl) return false;
+  try {
+    const response = await fetch(`${stateUrl}${stateUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!response.ok) return false;
+    const state = await response.json();
+    const today = localDateString(process.env.FEISHU_WINDOW_TIMEZONE || 'Asia/Shanghai');
+    if (state.date === today && state.status === 'sent' && state.source === 'local-mcp') {
+      console.log('Skipped cloud fallback: local MCP already sent today.');
+      return true;
+    }
+  } catch {
+    console.log('Could not read local-delivery state; cloud fallback will continue.');
+  }
+  return false;
+}
 function enforceSendWindow() {
   if (process.env.FEISHU_ENFORCE_WINDOW !== 'true') return;
   const timezone = process.env.FEISHU_WINDOW_TIMEZONE || 'Asia/Shanghai';
@@ -143,6 +166,7 @@ function buildReminderCard(imageKey, message) {
 }
 
 enforceSendWindow();
+if (await skipIfLocalAlreadySent()) process.exit(0);
 
 const auth = await requestJson('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
   method: 'POST',

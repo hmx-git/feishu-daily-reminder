@@ -8,7 +8,7 @@ on:
 jobs:
   send-reminder:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,6 +16,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Wait for local MCP first
+        if: ${{ github.event_name == 'schedule' }}
+        run: sleep 300
       - name: Send reminder card
         env:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
@@ -25,4 +28,6 @@ jobs:
           FEISHU_WINDOW_TIMEZONE: Asia/Shanghai
           FEISHU_WINDOW_START: '10:15'
           FEISHU_WINDOW_END: '10:28'
+          FEISHU_SKIP_IF_LOCAL_SENT: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+          FEISHU_LOCAL_STATE_URL: https://raw.githubusercontent.com/hmx-git/feishu-daily-reminder/main/data/local-delivery.json
         run: node src/send-reminder.js
