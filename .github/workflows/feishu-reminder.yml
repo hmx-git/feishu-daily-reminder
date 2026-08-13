@@ -1,8 +1,7 @@
-﻿name: Feishu daily meeting reminder
+name: Feishu daily meeting reminder
 
 on:
   schedule:
-    # 10:15 Asia/Shanghai = 02:15 UTC. GitHub may start scheduled jobs a few minutes late.
     - cron: '15 2 * * *'
   workflow_dispatch:
 
@@ -22,5 +21,8 @@ jobs:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+          FEISHU_ENFORCE_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+          FEISHU_WINDOW_TIMEZONE: Asia/Shanghai
+          FEISHU_WINDOW_START: '10:15'
+          FEISHU_WINDOW_END: '10:28'
         run: node src/send-reminder.js
-
