@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isWorkingDay, loadHolidayDates } from './workday.js';
 
 const required = ['FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_CHAT_ID'];
 for (const key of required) {
@@ -10,6 +11,9 @@ const defaultSheetUrl = 'https://qdreaming.feishu.cn/sheets/C7jXszp7OhnbgNt2xTuc
 const defaultMessage = `1. \u8f9b\u82e6\u5927\u5bb6\u63d0\u524d\u586b\u5199\u4f8b\u4f1a\u8868:\n[\u6253\u5f00\u4f8b\u4f1a\u8868](${defaultSheetUrl})\n\n2. \u6709\u4e8b\u4e0d\u80fd\u53c2\u52a0\u8054\u7cfbPM~`;
 const meetingSheetUrl = process.env.FEISHU_SHEET_URL || defaultSheetUrl;
 const defaultImagePath = process.env.FEISHU_IMAGE_PATH || 'assets/meeting-reminder.jpg';
+const holidayFile = path.resolve(process.env.FEISHU_HOLIDAY_FILE || 'data/holiday-calendar.json');
+const workdaysOnly = process.env.FEISHU_WORKDAYS_ONLY !== 'false';
+const holidayDates = await loadHolidayDates(holidayFile);
 
 function getTimeParts(timeZone) {
   return new Intl.DateTimeFormat('en-US', {
@@ -59,15 +63,24 @@ async function skipIfLocalAlreadySent() {
   }
   return false;
 }
+function enforceWorkday() {
+  if (!workdaysOnly) return;
+  const timezone = process.env.FEISHU_WINDOW_TIMEZONE || 'Asia/Shanghai';
+  const today = localDateString(timezone);
+  if (!isWorkingDay(today, holidayDates)) {
+    console.log(`Skipped reminder: ${today} is not a working day in ${timezone}`);
+    process.exit(0);
+  }
+}
 function enforceSendWindow() {
   if (process.env.FEISHU_ENFORCE_WINDOW !== 'true') return;
   const timezone = process.env.FEISHU_WINDOW_TIMEZONE || 'Asia/Shanghai';
   const parts = getTimeParts(timezone);
   const current = Number(parts.hour) * 60 + Number(parts.minute);
   const startText = process.env.FEISHU_WINDOW_START || '10:15';
-  const endText = process.env.FEISHU_WINDOW_END || '10:28';
+  const endText = process.env.FEISHU_WINDOW_END || '10:25';
   const start = parseClock(startText, '10:15');
-  const end = parseClock(endText, '10:28');
+  const end = parseClock(endText, '10:25');
   if (current < start || current > end) {
     console.log(`Skipped scheduled reminder: local time ${parts.hour}:${parts.minute} ${timezone} is outside ${startText}-${endText}.`);
     process.exit(0);
@@ -165,6 +178,7 @@ function buildReminderCard(imageKey, message) {
   };
 }
 
+enforceWorkday();
 enforceSendWindow();
 if (await skipIfLocalAlreadySent()) process.exit(0);
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { addCalendarDays, isWorkingDay, loadHolidayDates } from './workday.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: path.join(ROOT, '.env') });
@@ -18,6 +19,9 @@ let tokenCache = { value: '', expiresAt: 0 };
 const githubRepo = process.env.GITHUB_REPO || 'hmx-git/feishu-daily-reminder';
 const githubStatePath = process.env.GITHUB_STATE_PATH || 'data/local-delivery.json';
 const githubBranch = process.env.GITHUB_BRANCH || 'main';
+const holidayFile = path.resolve(process.env.FEISHU_HOLIDAY_FILE || path.join(ROOT, 'data', 'holiday-calendar.json'));
+const workdaysOnly = process.env.FEISHU_WORKDAYS_ONLY !== 'false';
+let holidayDates = new Set();
 
 async function loadSchedules() {
   try {
@@ -91,15 +95,18 @@ function zonedWallTimeToDate(dateString, hour, minute) {
   const wanted = Date.UTC(Number(dateString.slice(0, 4)), Number(dateString.slice(5, 7)) - 1, Number(dateString.slice(8, 10)), hour, minute, 0);
   return new Date(guess.getTime() + (wanted - shown));
 }
-function nextOccurrence(time) {
+function nextOccurrence(time, scheduleWorkdaysOnly = workdaysOnly) {
   const [hour, minute] = time.split(':').map(Number);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new Error('time 必须是 HH:mm 格式，例如 10:15。');
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new Error('time ??? HH:mm ????? 10:05?');
   const now = new Date();
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now).reduce((a, p) => (a[p.type] = p.value, a), {});
-  const today = `${parts.year}-${parts.month}-${parts.day}`;
-  let candidate = zonedWallTimeToDate(today, hour, minute);
-  if (candidate <= now) candidate = new Date(candidate.getTime() + 24 * 60 * 60 * 1000);
-  return candidate;
+  let dateString = `${parts.year}-${parts.month}-${parts.day}`;
+  let candidate = zonedWallTimeToDate(dateString, hour, minute);
+  if (candidate <= now) dateString = addCalendarDays(dateString, 1);
+  if (scheduleWorkdaysOnly) {
+    while (!isWorkingDay(dateString, holidayDates)) dateString = addCalendarDays(dateString, 1);
+  }
+  return zonedWallTimeToDate(dateString, hour, minute);
 }
 function localDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).reduce((result, part) => { result[part.type] = part.value; return result; }, {});
@@ -130,7 +137,7 @@ async function markLocalDeliverySent() {
 }
 function armSchedule(schedule) {
   if (timers.has(schedule.id)) clearTimeout(timers.get(schedule.id));
-  const delay = Math.max(0, nextOccurrence(schedule.time).getTime() - Date.now());
+  const delay = Math.max(0, nextOccurrence(schedule.time, schedule.workdays_only !== false).getTime() - Date.now());
   const timer = setTimeout(async () => {
     try {
       await sendMessage({ chatId: schedule.chat_id, chatName: schedule.chat_name, message: schedule.message });
@@ -154,11 +161,11 @@ server.registerTool('find_feishu_group', { description: '按群名称查找飞�
   try { return { content: [{ type: 'text', text: JSON.stringify(await findGroup(chat_name), null, 2) }] }; }
   catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] }; }
 });
-server.registerTool('schedule_daily_reminder', { description: '创建每天固定时间发送到飞书群的提醒，可启用 GitHub 云端兜底。', inputSchema: { time: z.string().regex(/^\d{2}:\d{2}$/).default('10:15'), chat_id: z.string().optional(), chat_name: z.string().optional(), message: z.string().min(1).default(defaultMessage), cloud_fallback: z.boolean().default(false) } }, async ({ time, chat_id, chat_name, message, cloud_fallback }) => {
+server.registerTool('schedule_daily_reminder', { description: '创建每天固定时间发送到飞书群的提醒，可启用 GitHub 云端兜底。', inputSchema: { time: z.string().regex(/^\d{2}:\d{2}$/).default('10:05'), chat_id: z.string().optional(), chat_name: z.string().optional(), message: z.string().min(1).default(defaultMessage), cloud_fallback: z.boolean().default(false), workdays_only: z.boolean().default(true) } }, async ({ time, chat_id, chat_name, message, cloud_fallback, workdays_only }) => {
   try {
     if (cloud_fallback && !process.env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is required when cloud_fallback is enabled.');
     const target = chat_id ? { chat_id, name: chat_name } : await findGroup(chat_name);
-    const schedule = { id: crypto.randomUUID(), type: 'daily', time, timezone, chat_id: target.chat_id, chat_name: target.name || chat_name, message, cloud_fallback, created_at: new Date().toISOString(), last_sent_at: null };
+    const schedule = { id: crypto.randomUUID(), type: 'daily', time, timezone, chat_id: target.chat_id, chat_name: target.name || chat_name, message, cloud_fallback, workdays_only, created_at: new Date().toISOString(), last_sent_at: null };
     schedules.push(schedule); await saveSchedules(); armSchedule(schedule);
     return { content: [{ type: 'text', text: JSON.stringify({ ok: true, schedule }, null, 2) }] };
   } catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] }; }
@@ -170,6 +177,7 @@ server.registerTool('cancel_scheduled_reminder', { description: '按提醒 ID �
   clearTimeout(timers.get(id)); timers.delete(id); const [removed] = schedules.splice(index, 1); await saveSchedules();
   return { content: [{ type: 'text', text: JSON.stringify({ ok: true, removed }, null, 2) }] };
 });
+holidayDates = await loadHolidayDates(holidayFile);
 await loadSchedules();
 for (const schedule of schedules) if (schedule.type === 'daily') armSchedule(schedule);
 await server.connect(new StdioServerTransport());
