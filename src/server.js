@@ -112,6 +112,19 @@ function localDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).reduce((result, part) => { result[part.type] = part.value; return result; }, {});
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
+function localClockMinutes(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour12: false, hour: '2-digit', minute: '2-digit' }).formatToParts(date).reduce((result, part) => { result[part.type] = part.value; return result; }, {});
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}
+function parseClock(text) {
+  const [hour, minute] = String(text).split(':').map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new Error(`Invalid clock value: ${text}`);
+  return hour * 60 + minute;
+}
+function isPastLocalDeadline(deadline) {
+  if (!deadline) return false;
+  return localClockMinutes() > parseClock(deadline);
+}
 function githubContentsUrl() {
   const encoded = githubStatePath.split('/').map((part) => encodeURIComponent(part)).join('/');
   return `https://api.github.com/repos/${githubRepo}/contents/${encoded}`;
@@ -139,6 +152,11 @@ function armSchedule(schedule) {
   if (timers.has(schedule.id)) clearTimeout(timers.get(schedule.id));
   const delay = Math.max(0, nextOccurrence(schedule.time, schedule.workdays_only !== false).getTime() - Date.now());
   const timer = setTimeout(async () => {
+    if (isPastLocalDeadline(schedule.latest_send_time)) {
+      console.error(`Skipped local reminder ${schedule.id}: local deadline ${schedule.latest_send_time} has passed.`);
+      armSchedule(schedule);
+      return;
+    }
     try {
       await sendMessage({ chatId: schedule.chat_id, chatName: schedule.chat_name, message: schedule.message });
       schedule.last_sent_at = new Date().toISOString();
@@ -161,11 +179,11 @@ server.registerTool('find_feishu_group', { description: '按群名称查找飞�
   try { return { content: [{ type: 'text', text: JSON.stringify(await findGroup(chat_name), null, 2) }] }; }
   catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] }; }
 });
-server.registerTool('schedule_daily_reminder', { description: '创建每天固定时间发送到飞书群的提醒，可启用 GitHub 云端兜底。', inputSchema: { time: z.string().regex(/^\d{2}:\d{2}$/).default('10:05'), chat_id: z.string().optional(), chat_name: z.string().optional(), message: z.string().min(1).default(defaultMessage), cloud_fallback: z.boolean().default(false), workdays_only: z.boolean().default(true) } }, async ({ time, chat_id, chat_name, message, cloud_fallback, workdays_only }) => {
+server.registerTool('schedule_daily_reminder', { description: '创建每天固定时间发送到飞书群的提醒，可启用 GitHub 云端兜底。', inputSchema: { time: z.string().regex(/^\d{2}:\d{2}$/).default('10:05'), chat_id: z.string().optional(), chat_name: z.string().optional(), message: z.string().min(1).default(defaultMessage), cloud_fallback: z.boolean().default(false), workdays_only: z.boolean().default(true), latest_send_time: z.string().regex(/^\d{2}:\d{2}$/).optional() } }, async ({ time, chat_id, chat_name, message, cloud_fallback, workdays_only, latest_send_time }) => {
   try {
     if (cloud_fallback && !process.env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN is required when cloud_fallback is enabled.');
     const target = chat_id ? { chat_id, name: chat_name } : await findGroup(chat_name);
-    const schedule = { id: crypto.randomUUID(), type: 'daily', time, timezone, chat_id: target.chat_id, chat_name: target.name || chat_name, message, cloud_fallback, workdays_only, created_at: new Date().toISOString(), last_sent_at: null };
+    const schedule = { id: crypto.randomUUID(), type: 'daily', time, timezone, chat_id: target.chat_id, chat_name: target.name || chat_name, message, cloud_fallback, workdays_only, latest_send_time, created_at: new Date().toISOString(), last_sent_at: null };
     schedules.push(schedule); await saveSchedules(); armSchedule(schedule);
     return { content: [{ type: 'text', text: JSON.stringify({ ok: true, schedule }, null, 2) }] };
   } catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] }; }
